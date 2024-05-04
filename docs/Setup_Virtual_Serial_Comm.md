@@ -35,4 +35,7 @@
   ./serial_transfer.sh receive images.jpeg /dev/pts/2
   ```
 
+> [!Note] One can also use xmodem on minicom to test. Write on terminal `minicom -D /dev/pts/1 -b 9600` 
+> and go to File transfer option on minicom and select xmodem.
+
 * FANTASTIC! We have two virtusl ports for serial UART communication for file transfer. Now we can utilize these ports to transfer files via xmodem protocol.
