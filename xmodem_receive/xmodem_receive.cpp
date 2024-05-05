@@ -1,10 +1,12 @@
 /**
-* @file uart_receive.cpp
-* @author Celeste Valambhia
-* @brief Implemetation of Sender code on Uart
+* @file		xmodem_receive.cpp
+* @author	Celeste Valambhia
+* @brief	Implemetation of Receiver code on Uart
 *
-* Uses: /dev/pts/1 Uart serial port at 9600 baud rate
-*
+* Uses:		/dev/pts/2 Uart serial port at 9600 baud rate
+* Xmodem frames: <soh><blk#><255-blk#><128 bytes data><CRC>
+* Refer to:	https://web.mit.edu/6.121/www/other/pcplot_man/pcplot14.htm
+*			http://ee6115.mit.edu/amulet/xmodem.htm
 */
 
 #include <iostream>

@@ -1,9 +1,12 @@
 /**
-* @file uart_send.cpp
-* @author Celeste Valambhia
-* @brief Implemetation of Sender code on Uart
+* @file		xmodem_send.cpp
+* @author	Celeste Valambhia
+* @brief	Implemetation of Xmodem Sender code on Uart
 *
-* Uses: /dev/pts/1 Uart serial port at 9600 baud rate
+* Uses:		/dev/pts/1 Uart serial port at 9600 baud rate
+* Xmodem frames: <soh><blk#><255-blk#><128 bytes data><CRC>
+* Refer to: https://web.mit.edu/6.121/www/other/pcplot_man/pcplot14.htm
+*			http://ee6115.mit.edu/amulet/xmodem.htm
 *
 */
 
@@ -14,41 +17,17 @@
 #include <cstring>
 #include <stdexcept>
 
-class SerialPort {
-public:
-    SerialPort(const char* port) 
-	:port_(port) {
-        serial_port_ = open(port_, O_RDWR);
-        if (serial_port_ < 0) {
-            throw std::runtime_error("Failed to open serial port.");
-        }
-        configurePort();
-    }
-
-    // Destructor
-    ~SerialPort() {
-        close(serial_port_);
-    }
-
-    // Copy constructor
-    SerialPort(const SerialPort& other) = delete;
-
-    // Copy assignment operator
-    SerialPort& operator=(const SerialPort& other) = delete;
-
-	// Send Data
-    void sendData(const char* data) const {
-        ssize_t bytes_written = write(serial_port_, data, strlen(data));
-        if (bytes_written < 0) {
-            throw std::runtime_error("Error writing to serial port.");
-        }
-    }
-
+class SerialPortSender {
 private:
     const char* port_;
+	const char* filename_;
     int serial_port_;
 
-	// Configure uart port
+	/* Xmodem protocol flow control defines */
+	static const char SOH = 0x01;
+
+
+	/* Configure Uart port */
     void configurePort() {
         struct termios tty;
         tcgetattr(serial_port_, &tty);
@@ -70,6 +49,36 @@ private:
             throw std::runtime_error("Error configuring serial port.");
         }
     }
+
+public:
+    SerialPortSender(const char* port, const char* filename)
+		: port_(port), filename_(filename) {
+        serial_port_ = open(port_, O_RDWR);
+        if (serial_port_ < 0) {
+            throw std::runtime_error("Failed to open serial port.");
+        }
+        configurePort();
+    }
+
+    // Destructor
+    ~SerialPortSender() {
+        close(serial_port_);
+    }
+
+    // Copy constructor
+    SerialPortSender(const SerialPortSender& other) = delete;
+
+    // Copy assignment operator
+    SerialPortSender& operator=(const SerialPortSender& other) = delete;
+
+	// Send Data
+    void sendData(const char* data) const {
+        ssize_t bytes_written = write(serial_port_, data, strlen(data));
+        if (bytes_written < 0) {
+            throw std::runtime_error("Error writing to serial port.");
+        }
+    }
+
 };
 
 int main() {
