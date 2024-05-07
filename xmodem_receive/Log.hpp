@@ -22,7 +22,7 @@ private:
 
 	template <typename T, typename... Args>
 	void Helper(const T& firstArg, const Args&... args) {
-		std::cout << ", " << firstArg;
+		std::cout << firstArg;
 		Helper(args...);
 	}
 

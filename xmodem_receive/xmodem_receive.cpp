@@ -26,8 +26,8 @@ Log log_message;
 
 /***********************************************************************/
 /* Port to receive data from */
-#define RECEIVE_PORT "/dev/pts/2"
-#define BAUD_RATE B9600
+#define RECEIVE_PORT "/dev/pts/4"
+//#define BAUD_RATE B9600
 
 /* Xmodem data buffer size */
 #define XDATA_BUFFER_SIZE 128
@@ -65,24 +65,24 @@ private:
 		tty.c_cc[VMIN] = 1;  // Minimum number of characters to read
 		tty.c_cc[VTIME] = 5; // Timeout in deciseconds for non-canonical read
 
-		cfsetospeed(&tty, BAUD_RATE); // Set baud rate to 9600 bps
+		cfsetospeed(&tty, B9600); // Set baud rate to 9600 bps
 
 		if (tcsetattr(serial_port_, TCSANOW, &tty) != 0) {
 			//throw std::runtime_error("Error configuring serial port.");
 			log_message.Error("Error configuring UART serial port.");
 		}
-		log_message.Info("Configured Uart port ", serial_port_, " at ", BAUD_RATE, " baud rate.");
+		log_message.Info("Configured Uart port ", port_, " at 9600 baud rate.");
 	}
 
 	/* CRC calculation code */
-	uint16_t calcrc(char* ptr, int count) // replacing int with uint16_t
+	unsigned short calcrc(char* ptr, int count) // replacing int with uint16_t
 	{
-		uint16_t crc;
-		uint8_t i;
+		unsigned short crc;
+		int i;
 		crc = 0;
 		while (--count >= 0) // iterate over every byte of data
 		{
-			crc = crc ^ (uint16_t)*ptr++ << 8; // crc is XORed with the current byte shifted left by 8 bits
+			crc = crc ^ (unsigned short)*ptr++ << 8; // crc is XORed with the current byte shifted left by 8 bits
 			i = 8; // number of bits
 			do
 			{
@@ -93,35 +93,35 @@ private:
 			} while (--i);
 		}
 		log_message.Debug("CRC: ", crc);
-		return (crc);
+		return crc;
 	}
 
 public:
 	/* Constructor : Configures serial Uart port and initializes the Receiver */
-    SerialPortReceiver(const char* port, const char* filename)
+	SerialPortReceiver(const char* port, const char* filename)
 		: port_(port), filename_(filename) {
-        serial_port_ = open(port_, O_RDWR);
-        if (serial_port_ < 0) {
-            //throw std::runtime_error("Failed to open serial port.");
-			log_message.Error("Failed to open serial port.");
+			serial_port_ = open(port_, O_RDWR);
+			if (serial_port_ < 0) {
+				//throw std::runtime_error("Failed to open serial port.");
+				log_message.Error("Failed to open serial port.");
+			}
+			log_message.Info("Opened serial port for Read and Write.");
+			configurePort();
 		}
-		log_message.Info("Opened serial port for Read and Write.");
-        configurePort();
-    }
 
 	/* Destructor: Closes the serial uart port */
-    ~SerialPortReceiver() {
-        close(serial_port_);
+	~SerialPortReceiver() {
+		close(serial_port_);
 		log_message.Info("Uart serial port closed.");
-    }
+	}
 
 	/* Copy constructor */
-    SerialPortReceiver(const SerialPortReceiver& other) = delete;
+	SerialPortReceiver(const SerialPortReceiver& other) = delete;
 
 	/* Copy assignment operator */
-    SerialPortReceiver& operator=(const SerialPortReceiver& other) = delete;
+	SerialPortReceiver& operator=(const SerialPortReceiver& other) = delete;
 
-    /* Receive data on Uart via Xmodem protocol */
+	/* Receive data on Uart via Xmodem protocol */
 	void receiveData() {
 		log_message.Info("Receiving file ", filename_);
 
@@ -136,8 +136,8 @@ public:
 			log_message.Error("Failed to create file");
 		}
 
-		uint8_t blk = 1; //binary number, starts at 01 increments by 1, and wraps OFFH to OOH (not to 01)
-		uint8_t blk_comp = ~blk; //complement of blk i.e. 255-blk
+		unsigned char blk = 1; //binary number, starts at 01 increments by 1, and wraps OFFH to OOH (not to 01)
+		unsigned char blk_comp = ~blk; //complement of blk i.e. 255-blk
 		char buffer[XPACKET_BUFFER_SIZE]; // 128 bytes data + 3 bytes header
 
 		log_message.Info("Receiving data...");
@@ -164,15 +164,15 @@ public:
 
 			/* Calculate CRC */
 			log_message.Debug("Calculating CRC...");
-            unsigned short crc = calcrc(buffer + 3, XDATA_BUFFER_SIZE);
-            unsigned short recv_crc = (buffer[131] << 8) | buffer[132];
-            if (crc != recv_crc) {
+			unsigned short crc = calcrc(buffer + 3, XDATA_BUFFER_SIZE);
+			unsigned short recv_crc = (buffer[131] << 8) | buffer[132];
+			if (crc != recv_crc) {
 				/* Send NAK for retransmission */
 				log_message.Debug("Data corrupted, CRC does not match. Retransmission required. Sending NAK to the sender.");
 				char nak = NAK;
 				write(serial_port_, &nak, 1);
 				continue;
-            }
+			}
 			log_message.Debug("CRC matches, Block: ", blk, " read successfully.");
 
 			/* Writing data to file */
@@ -196,7 +196,7 @@ public:
 				break;
 			}
 		}
-		
+
 		log_message.Info("File received successfully.");
 	}
 
