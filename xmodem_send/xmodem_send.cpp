@@ -26,15 +26,6 @@
 Log log_message;
 
 /***********************************************************************/
-/* Xmodem protocol flow control defines */
-#define SOH 0x01 // Start of Header
-#define EOT 0x04 // End of Transmission
-#define ACK 0x06 // Acknowledgement
-#define NAK 0x15 // Not Acknowledgement
-#define ETB 0x17 // End of Transmission Block (Return to Amulet OS mode)
-#define CAN 0x18 // Cancel (Force receiver to start sending C's)
-#define C 0x43	 // ASCII “C”
-
 /* Port to send data from */
 #define SEND_PORT "/dev/pts/1"
 #define BAUD_RATE B9600
@@ -50,6 +41,14 @@ private:
     const char* port_;
 	const char* filename_;
     int serial_port_;
+	/* Xmodem protocol flow control defines */
+	static const char SOH = 0x01; // Start of Header
+	static const char EOT = 0x04; // End of Transmission
+	static const char ACK = 0x06; // Acknowledgement
+	static const char NAK = 0x15; // Not Acknowledgement
+	static const char ETB = 0x17; // End of Transmission Block (Return to Amulet OS mode)
+	static const char CAN = 0x18; // Cancel (Force receiver to start sending C's)
+	static const char C = 0x43;	 // ASCII “C”
 
 	/* Configure Uart port */
     void configurePort() {
@@ -128,6 +127,7 @@ public:
 	/* Send data on Uart via Xmodem protocol */ 
 	void sendData() {
 		log_message.Info("Sending file ", filename_);
+
 		std::ifstream file(filename_, std::ios::binary); //opening the file in binary mode, which is suilable for reading binary data such as images, executables, or any files
 		if (!file) {
 			//throw std::runtime_error("Failed to open file.");
@@ -143,7 +143,7 @@ public:
 		/* Wait for 'C' from receiver */
 		char handshake;
 		read(serial_port_, &handshake, 1);
-		if (handshake != 'C') {
+		if (handshake != C) {
 			//throw std::runtime_error("Failed to receive 'C' handshake from receiver.");
 			log_message.Error("Failed to receive 'C' handshake from receiver.");
 		}
@@ -166,7 +166,7 @@ public:
 
 			if (bytes_read < XDATA_BUFFER_SIZE) {
 				// Pad the remaining bytes with 0x04 EOT
-				memset(buffer + 3 + bytes_read, EOT, 128 - bytes_read);
+				memset(buffer + 3 + bytes_read, 0x04, 128 - bytes_read);
 				log_message.Debug("Padding the remaining bytes with EOT(0x04).");
 			}
 
