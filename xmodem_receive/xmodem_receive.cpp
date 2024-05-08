@@ -123,6 +123,9 @@ public:
 
 	/* Receive data on Uart via Xmodem protocol */
 	void receiveData() {
+		/* Clear existing data on Uart port in case garbage values are present */
+		tcflush(serial_port_, TCIFLUSH);
+
 		log_message.Info("Receiving file ", filename_);
 
 		/* Send 'C' to indicate readiness to receive data in CRC mode */
@@ -140,8 +143,9 @@ public:
 		unsigned char blk_comp = ~blk; //complement of blk i.e. 255-blk
 		char buffer[XPACKET_BUFFER_SIZE]; // 128 bytes data + 3 bytes header
 
-		log_message.Info("Receiving data...");
 		while (true) {
+			log_message.Info("Receiving data...");
+
 			/* Wait for SOH */
 			char soh;
 			read(serial_port_, &soh, 1);
@@ -149,13 +153,15 @@ public:
 				//throw std::runtime_error("Invalid header received.");
 				log_message.Error("Invalid header received.");
 			}
+			buffer[0] = soh;
 			log_message.Debug("SOH received.");
 
 			/* Read the packet */
-			read(serial_port_, buffer, XPACKET_BUFFER_SIZE);
+			read(serial_port_, buffer+1, XPACKET_BUFFER_SIZE);
 			log_message.Debug("Reading block: ", blk, "...");
-			if (buffer[1] != blk || buffer[2] != blk_comp) {
+			if (buffer[1] != static_cast<unsigned char>(blk) || buffer[2] != static_cast<unsigned char>(blk_comp)) {
 				/* Send NAK for retransmission */
+				log_message.Debug("blk: ", static_cast<int>(buffer[1]), ", blk_comp: ", static_cast<int>(buffer[2]));
 				log_message.Debug("Data corrupted, blk value does not match. Retransmission required. Sending NAK to the sender.");
 				char nak = NAK;
 				write(serial_port_, &nak, 1);

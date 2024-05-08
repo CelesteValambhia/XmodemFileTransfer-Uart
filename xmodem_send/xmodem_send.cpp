@@ -72,7 +72,7 @@ private:
 			//throw std::runtime_error("Error configuring UART serial port.");
 			log_message.Error("Error configuring UART serial port.");
 		}
-		log_message.Info("Configured Uart port ", port_, "at 9600 baud rate.");
+		log_message.Info("Configured Uart port ", port_, " at 9600 baud rate.");
 	}
 
 	/* CRC calculation code */
@@ -128,6 +128,9 @@ public:
 	void sendData() {
 		log_message.Info("Sending file ", filename_);
 
+		/* Clear existing data on Uart port in case garbage values are present */
+		tcflush(serial_port_, TCIFLUSH);
+
 		std::ifstream file(filename_, std::ios::binary); //opening the file in binary mode, which is suilable for reading binary data such as images, executables, or any files
 		if (!file) {
 			//throw std::runtime_error("Failed to open file.");
@@ -158,11 +161,8 @@ public:
 		long long bytes_sent = 0;
 		while (!file.eof()) {
 			buffer[0] = SOH;
-			//std::cout << buffer[0] << std::endl;
 			buffer[1] = blk;
-			//std::cout << buffer[1] << std::endl;
-			buffer[2] = blk_comp;
-			//std::cout << buffer[2] << std::endl;
+			buffer[2] = (blk_comp);
 			std::cout << "SOH: " << static_cast<int>(SOH) << ", blk: " << static_cast<int>(blk) << ", blk_comp: " << static_cast<int>(blk_comp) << std::endl;
 
 			file.read(buffer + 3, XDATA_BUFFER_SIZE);
@@ -181,7 +181,7 @@ public:
 			buffer[132] = crc & 0xFF; // The LSB is stored here. The `& 0xFF` operation ensures that only the 8 least significant bits of the CRC value are retained, effectively masking out any higher-order bits that may have been shifted into the LSB position during the previous step.
 
 			log_message.Debug("The Xmodem packet frame is: \n");
-			log_message.Debug("<SOH: ", buffer[0], "><blk: ", buffer[1], "><255-blk: ", buffer[2], "><128 byte data><CRC: ", buffer[131], " ", buffer[132], ">");
+			log_message.Debug("<SOH: ", static_cast<int>(buffer[0]), "><blk: ", static_cast<int>(buffer[1]), "><255-blk: ", static_cast<int>(buffer[2]), "><128 byte data><CRC: ", static_cast<int>(buffer[131]), " ", static_cast<int>(buffer[132]), ">");
 
 			log_message.Info("Writing the frames on serial port.");
 			write(serial_port_, buffer, 133);
