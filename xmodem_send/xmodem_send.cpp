@@ -27,8 +27,7 @@ Log log_message;
 
 /***********************************************************************/
 /* Port to send data from */
-#define SEND_PORT "/dev/pts/3"
-//#define BAUD_RATE B9600
+#define SEND_PORT "/dev/pts/1"
 
 /* Xmodem data buffer size */
 #define XDATA_BUFFER_SIZE 128
@@ -104,7 +103,6 @@ public:
 		: port_(port), filename_(filename) {
 			serial_port_ = open(port_, O_RDWR);
 			if (serial_port_ < 0) {
-				//throw std::runtime_error("Failed to open serial port.");
 				log_message.Error("Failed to open serial port.");
 			}
 			log_message.Info("Opened serial port for Read and Write.");
@@ -133,7 +131,6 @@ public:
 
 		std::ifstream file(filename_, std::ios::binary); //opening the file in binary mode, which is suilable for reading binary data such as images, executables, or any files
 		if (!file) {
-			//throw std::runtime_error("Failed to open file.");
 			log_message.Error("Failed to open file. Cross-check file name and permissions");
 		}
 
@@ -147,7 +144,6 @@ public:
 		char handshake;
 		read(serial_port_, &handshake, 1);
 		if (handshake != C) {
-			//throw std::runtime_error("Failed to receive 'C' handshake from receiver.");
 			log_message.Error("Failed to receive 'C' handshake from receiver.");
 		}
 		log_message.Info("Received 'C' handshake from receiver.");
@@ -163,16 +159,17 @@ public:
 			buffer[0] = SOH;
 			buffer[1] = blk;
 			buffer[2] = (blk_comp);
-			std::cout << "SOH: " << static_cast<int>(SOH) << ", blk: " << static_cast<int>(blk) << ", blk_comp: " << static_cast<int>(blk_comp) << std::endl;
 
 			file.read(buffer + 3, XDATA_BUFFER_SIZE);
 			int bytes_read = file.gcount();
 			log_message.Debug("Number of bytes read in the file: ", bytes_read);
 
+			int bytes_padded = 0;
 			if (bytes_read < XDATA_BUFFER_SIZE) {
-				// Pad the remaining bytes with 0x1A (Ctrl+Z)
-				memset(buffer + 3 + bytes_read, 0x1A, XDATA_BUFFER_SIZE - bytes_read);
-				log_message.Debug("Padding the remaining bytes with 0x1A.");
+				bytes_padded = XDATA_BUFFER_SIZE - bytes_read;
+				// Pad the remaining bytes with 0x00
+				memset(buffer + 3 + bytes_read, 0x00, bytes_padded);
+				log_message.Debug("Padding the remaining bytes with 0x00.");
 			}
 
 			/* Calculate CRC of data */
@@ -181,15 +178,26 @@ public:
 			buffer[132] = crc & 0xFF; // The LSB is stored here. The `& 0xFF` operation ensures that only the 8 least significant bits of the CRC value are retained, effectively masking out any higher-order bits that may have been shifted into the LSB position during the previous step.
 
 			log_message.Debug("The Xmodem packet frame is: \n");
-			log_message.Debug("<SOH: ", static_cast<int>(buffer[0]), "><blk: ", static_cast<int>(buffer[1]), "><255-blk: ", static_cast<int>(buffer[2]), "><128 byte data><CRC: ", static_cast<int>(buffer[131]), " ", static_cast<int>(buffer[132]), ">");
+			unsigned char sof = static_cast<unsigned char>(buffer[0]);
+			unsigned char send_blk = static_cast<unsigned char>(buffer[1]);
+			unsigned char send_blk_comp = static_cast<unsigned char>(buffer[2]);
+			unsigned char crc1 = static_cast<unsigned char>(buffer[131]);
+			unsigned char crc2 = static_cast<unsigned char>(buffer[132]);
+			log_message.Debug("<SOH: ", static_cast<int>(sof), "><blk: ", static_cast<int>(send_blk), "><255-blk: ", static_cast<int>(send_blk_comp), "><128 byte data><CRC: ", static_cast<int>(crc1), " ", static_cast<int>(crc2), ">");
 
-			log_message.Info("Writing the frames on serial port.");
+			/* Write frames on serial port */
 			write(serial_port_, buffer, 133);
 			bytes_sent += XDATA_BUFFER_SIZE;
 
 			/* Calculate progress in percentage */
-			int progress = static_cast<int>((bytes_sent * 100) / file_size);
-			log_message.Info("Progress: ", progress, " %");
+			int progress = 0;
+			int total_file_size = file_size + bytes_padded;
+			if (total_file_size > XDATA_BUFFER_SIZE) {
+				progress = static_cast<int>((bytes_sent * 100) / total_file_size);
+			} else {
+				progress = 100;
+			}
+			log_message.Info("Writing the frames on serial port, Progress: ", progress, " %");
 
 			/* Waiting for response from receiver */
 			char response;
@@ -204,7 +212,6 @@ public:
 				blk_comp = ~blk;
 			}
 			else {
-				//throw std::runtime_error("Unexpected response from receiver.");
 				log_message.Error("Unexpected response from receiver.");
 			}
 
@@ -219,7 +226,6 @@ public:
 		char response;
 		read(serial_port_, &response, 1);
 		if (response != ACK) {
-			//throw std::runtime_error("Failed to receive ACK after sending EOT.");
 			log_message.Error("Failed to receive ACK after sending EOT.");
 		}
 		log_message.Debug("Received ACK for EOT.");
@@ -231,7 +237,7 @@ public:
 /***********************************************************************/
 int main(int argc, char* argv[]) {
 	/* Set log level */
-	log_message.SetLevel(log_message.LogLevelDebug);
+	log_message.SetLevel(log_message.LogLevelInfo);
 
 	if (argc != 2) {
 		log_message.Error("Usage: ", argv[0], " <file_to_send>");

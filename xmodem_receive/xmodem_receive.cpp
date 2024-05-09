@@ -19,15 +19,14 @@
 #include <cstdint>
 #include <string.h>
 #include <fstream>
-#include "Log.hpp" 
+#include "Log.hpp"
 
 /* Declaring log module */
 Log log_message;
 
 /***********************************************************************/
 /* Port to receive data from */
-#define RECEIVE_PORT "/dev/pts/4"
-//#define BAUD_RATE B9600
+#define RECEIVE_PORT "/dev/pts/2"
 
 /* Xmodem data buffer size */
 #define XDATA_BUFFER_SIZE 128
@@ -102,7 +101,6 @@ public:
 		: port_(port), filename_(filename) {
 			serial_port_ = open(port_, O_RDWR);
 			if (serial_port_ < 0) {
-				//throw std::runtime_error("Failed to open serial port.");
 				log_message.Error("Failed to open serial port.");
 			}
 			log_message.Info("Opened serial port for Read and Write.");
@@ -135,7 +133,6 @@ public:
 
 		std::ofstream file(filename_, std::ios::binary); // Create the binary file
 		if (!file) {
-			//throw std::runtime_error("Failed to create file.");
 			log_message.Error("Failed to create file");
 		}
 
@@ -143,36 +140,45 @@ public:
 		unsigned char blk_comp = ~blk; //complement of blk i.e. 255-blk
 		char buffer[XPACKET_BUFFER_SIZE]; // 128 bytes data + 3 bytes header
 
+		log_message.Info("Receiving data...");
 		while (true) {
-			log_message.Info("Receiving data...");
-
-			/* Wait for SOH */
-			char soh;
-			read(serial_port_, &soh, 1);
-			if (soh != SOH) {
-				//throw std::runtime_error("Invalid header received.");
-				log_message.Error("Invalid header received.");
-			}
-			buffer[0] = soh;
-			log_message.Debug("SOH received.");
-
 			/* Read the packet */
-			read(serial_port_, buffer+1, XPACKET_BUFFER_SIZE);
+			read(serial_port_, buffer, XPACKET_BUFFER_SIZE);
 			log_message.Debug("Reading block: ", blk, "...");
-			if (buffer[1] != static_cast<unsigned char>(blk) || buffer[2] != static_cast<unsigned char>(blk_comp)) {
-				/* Send NAK for retransmission */
+			unsigned char sof = static_cast<unsigned char>(buffer[0]);
+			unsigned char recv_blk = static_cast<unsigned char>(buffer[1]);
+			unsigned char recv_blk_comp = static_cast<unsigned char>(buffer[2]);
+			unsigned char crc1 = static_cast<unsigned char>(buffer[131]);
+			unsigned char crc2 = static_cast<unsigned char>(buffer[132]);
+			log_message.Debug("<SOH: ", static_cast<int>(sof), "><blk: ", static_cast<int>(recv_blk), "><255-blk: ", static_cast<int>(recv_blk_comp), "><128 byte data><CRC: ", static_cast<int>(crc1), " ", static_cast<int>(crc2), ">");
+
+			/* Check for EOT */
+            if (sof == EOT) {
+				// Send ACK for EOT
+				char ack = ACK;
+				write(serial_port_, &ack, 1);
+				log_message.Debug("EOT received, sent ACK.");
+				break;
+			}
+
+			/* If not EOT */
+			if (sof != SOH  || recv_blk != static_cast<unsigned char>(blk) || recv_blk_comp != static_cast<unsigned char>(blk_comp)) {
+				// Send NAK for retransmission
 				log_message.Debug("blk: ", static_cast<int>(buffer[1]), ", blk_comp: ", static_cast<int>(buffer[2]));
 				log_message.Debug("Data corrupted, blk value does not match. Retransmission required. Sending NAK to the sender.");
 				char nak = NAK;
 				write(serial_port_, &nak, 1);
 				continue;
 			}
+			log_message.Debug("SOH, blk and blk_comp matches.");
 
 			/* Calculate CRC */
 			log_message.Debug("Calculating CRC...");
 			unsigned short crc = calcrc(buffer + 3, XDATA_BUFFER_SIZE);
-			unsigned short recv_crc = (buffer[131] << 8) | buffer[132];
-			if (crc != recv_crc) {
+			unsigned char recv_crc1 = (crc >> 8);
+			unsigned char recv_crc2 = crc & 0xFF;
+			log_message.Debug("<CRC: ", static_cast<int>(recv_crc1), ", ", static_cast<int>(recv_crc2), ">");
+			if (crc1 != recv_crc1 && crc2 != recv_crc2) {
 				/* Send NAK for retransmission */
 				log_message.Debug("Data corrupted, CRC does not match. Retransmission required. Sending NAK to the sender.");
 				char nak = NAK;
@@ -193,14 +199,6 @@ public:
 			/* Move to the next block */
 			++blk;
 			blk_comp = ~blk;
-
-			/* Check for EOT */
-			if (buffer[0] == EOT) {
-				// Send ACK for EOT
-				write(serial_port_, &ack, 1);
-				log_message.Debug("EOT received, sent ACK.");
-				break;
-			}
 		}
 
 		log_message.Info("File received successfully.");
@@ -211,7 +209,7 @@ public:
 /***********************************************************************/
 int main(int argc, char* argv[]) {
 	/* Set log level */
-	log_message.SetLevel(log_message.LogLevelDebug);
+	log_message.SetLevel(log_message.LogLevelInfo);
 
 	if (argc != 2) {
 		log_message.Error("Usage: ", argv[0], " <file_to_receive>");
