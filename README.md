@@ -21,6 +21,5 @@
 ./xmodem_receive test.txt
 ```
 > Note that the send function should be run first and then the receive function. The reason for this is, when the send function is called it first clears any garbage data on Uart port before sending. Hence, if the receive function is called before the send function, the handshake 'C' will also be cleared along with the garbage data, and one has to abort and call receive again.
-
-
-###### Thank you for the assignment. I hope you like my work. I'm extremly grateful for this opportunity and excited to join the team. 
+>
+> ToDo: Implement timeout functionality. 
